@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestione Inventario (Firebase)</title>
+  
+  <!-- 1. Carica Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Stili CSS (invariati) */
+    input[type='number']::-webkit-inner-spin-button,
+    input[type='number']::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type='number'] {
+      -moz-appearance: textfield;
+    }
+
+    /* Stili per il bordo di stato */
+    .status-border-red {
+      border-left: 5px solid #EF4444; /* red-500 */
+    }
+    .status-border-yellow {
+      border-left: 5px solid #F59E0B; /* amber-500 */
+    }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-4 md:p-8 font-sans dark:bg-gray-900">
+
+  <!-- Overlay di caricamento -->
+  <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-50 flex flex-col items-center justify-center z-[999]">
+    <svg class="animate-spin h-10 w-10 text-white mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+    <span class="text-white text-lg font-medium">Caricamento dati...</span>
+  </div>
+
+  <!-- Contenitore Custom Alert -->
+  <div id="custom-alert" class="fixed top-5 right-5 z-[1000] p-4 rounded-lg shadow-lg max-w-sm hidden animate-pulse">
+    <div class="flex items-start">
+      <div id="custom-alert-icon" class="flex-shrink-0">
+        <!-- Icona (cambia con JS) -->
+      </div>
+      <div class="ml-3 w-0 flex-1 pt-0.5">
+        <p id="custom-alert-title" class="text-sm font-semibold"></p>
+        <p id="custom-alert-message" class="mt-1 text-sm"></p>
+      </div>
+      <div class="ml-4 flex-shrink-0 flex">
+        <button id="custom-alert-close-btn" class="inline-flex rounded-md p-1.5 focus:outline-none focus:ring-2 focus:ring-offset-2">
+          <span class="sr-only">Chiudi</span>
+          <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="max-w-7xl mx-auto">
+    
+    <!-- Intestazione e Navigazione Viste -->
+    <header class="mb-6">
+      <div class="flex justify-between items-center">
+        <h1 class="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100">Gestione Inventario</h1>
+        <div class="flex items-center space-x-4">
+          <!-- Pulsante Home -->
+          <button id="btn-go-home" class="hidden text-gray-500 hover:text-blue-600 transition-colors dark:text-gray-400 dark:hover:text-blue-400">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+            </svg>
+          </button>
+          
+          <!-- Dark Mode Toggle RIMOSSO -->
+          
+        </div>
+      </div>
+
+      <!-- Wrapper per le schede di navigazione -->
+      <nav id="main-nav-tabs" class="flex space-x-2 mt-4 hidden">
+        <button id="nav-inventario"
+          class="px-3 py-2 md:px-4 text-sm md:text-base rounded-lg font-semibold shadow-md transition-all duration-200 bg-blue-600 text-white">
+          Inventario
+        </button>
+        <button id="nav-listaSpesa"
+          class="px-3 py-2 md:px-4 text-sm md:text-base rounded-lg font-semibold shadow-md transition-all duration-200 bg-white text-gray-700 dark:bg-gray-700 dark:text-gray-200">
+          Lista Spesa
+          <span id="shopping-list-badge" class="ml-2 bg-red-500 text-white text-xs font-bold rounded-full px-2 py-1 hidden">
+          </span>
+        </button>
+        <!-- NUOVO: Pulsante Navigazione Cantina Aggiunto -->
+        <button id="nav-cantina"
+          class="px-3 py-2 md:px-4 text-sm md:text-base rounded-lg font-semibold shadow-md transition-all duration-200 bg-white text-gray-700 dark:bg-gray-700 dark:text-gray-200">
+          Cantina Vini
+        </button>
+      </nav>
+    </header>
+
+    <!-- Sezione Viste -->
+    <main>
+      
+      <!-- VISTA: Home -->
+      <div id="view-home">
+        <h2 class="text-2xl font-semibold text-gray-700 mb-6 dark:text-gray-200">Menu Principale</h2>
+        <!-- MODIFICATO: grid-cols-2 per un layout bilanciato -->
+        <div class="grid grid-cols-2 md:grid-cols-2 gap-4">
+          <!-- Bottone Inventario -->
+          <button id="btn-go-inventario" class="flex flex-col items-center justify-center bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow text-center dark:bg-gray-800 dark:hover:shadow-lg dark:hover:shadow-gray-700/50">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-blue-600 dark:text-blue-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+            <span class="text-xl font-semibold text-gray-800 dark:text-gray-100">Inventario</span>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Gestisci e aggiungi prodotti</p>
+          </button>
+          
+          <!-- Bottone Lista Spesa -->
+          <button id="btn-go-listaspesa" class="flex flex-col items-center justify-center bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow text-center dark:bg-gray-800 dark:hover:shadow-lg dark:hover:shadow-gray-700/50">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-red-500 dark:text-red-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            <span class="text-xl font-semibold text-gray-800 dark:text-gray-100">Lista Spesa</span>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Vedi i prodotti da ordinare</p>
+          </button>
+          
+          <!-- Bottone Report Costi -->
+          <button id="btn-go-costi" class="flex flex-col items-center justify-center bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow text-center dark:bg-gray-800 dark:hover:shadow-lg dark:hover:shadow-gray-700/50">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-green-600 dark:text-green-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            <span class="text-xl font-semibold text-gray-800 dark:text-gray-100">Report Costi</span>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Visualizza valore inventario</p>
+          </button>
+
+          <!-- NUOVO: Bottone Cantina Vini -->
+          <button id="btn-go-cantina" class="flex flex-col items-center justify-center bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow text-center dark:bg-gray-800 dark:hover:shadow-lg dark:hover:shadow-gray-700/50">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-purple-600 dark:text-purple-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h6m-6 4h6m-6 4h6" />
+            </svg>
+            <span class="text-xl font-semibold text-gray-800 dark:text-gray-100">Cantina Vini</span>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Gestisci la tua cantina</p>
+          </button>
+        </div>
+
+        <!-- Bottoni CSV (rimangono full-width) -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <!-- Bottone Carica CSV -->
+          <div class="md:col-span-3 mt-4">
+             <button id="btn-show-csv-upload" class="flex w-full items-center justify-center bg-gray-600 text-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow text-center dark:bg-gray-700 dark:hover:shadow-lg dark:hover:shadow-gray-600/50">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-100 mb-3 md:mb-0 md:mr-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-4-4V7a4 4 0 014-4h10a4 4 0 014 4v5a4 4 0 01-4 4H7zM7 16V7m0 9v5m0-5h10m0 0v5m0-5V7" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M7 16h10" />
+              </svg>
+              <div class="text-left">
+                <!-- TESTO MODIFICATO -->
+                <span class="text-xl font-semibold text-white">Importa CSV Inventario</span>
+                <p class="text-sm text-gray-300 mt-1">Carica un file .csv con 'nome', 'categoria', 'fornitore'. Evita duplicati.</p>
+              </div>
+            </button>
+            <input type="file" id="csv-file-input" accept=".csv" class="hidden">
+          </div>
+
+          <!-- NUOVO: Bottone Carica CSV Vini -->
+          <div class="md:col-span-3 mt-4">
+             <button id="btn-show-csv-upload-vini" class="flex w-full items-center justify-center bg-purple-600 text-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow text-center dark:bg-purple-700 dark:hover:shadow-lg dark:hover:shadow-gray-600/50">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-100 mb-3 md:mb-0 md:mr-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-4-4V7a4 4 0 014-4h10a4 4 0 014 4v5a4 4 0 01-4 4H7zM7 16V7m0 9v5m0-5h10m0 0v5m0-5V7" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M7 16h10" />
+              </svg>
+              <div class="text-left">
+                <span class="text-xl font-semibold text-white">Importa CSV Vini</span>
+                <p class="text-sm text-gray-300 mt-1">Carica un file .csv con 'nome', 'anno', 'cantina', 'regione', 'costo', 'vendita', 'quantita'.</p>
+              </div>
+            </button>
+            <input type="file" id="csv-file-input-vini" accept=".csv" class="hidden">
+          </div>
+
+          <!-- Bottone Esporta CSV (NUOVO) -->
+          <div class="md:col-span-3 mt-4">
+             <button id="btn-export-csv" class="flex w-full items-center justify-center bg-green-600 text-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow text-center dark:bg-green-700 dark:hover:shadow-lg dark:hover:shadow-gray-600/50">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-100 mb-3 md:mb-0 md:mr-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              <div class="text-left">
+                <span class="text-xl font-semibold text-white">Esporta Backup CSV</span>
+                <p class="text-sm text-gray-300 mt-1">Salva una copia di backup di tutto l'inventario in un file .csv.</p>
+              </div>
+            </button>
+          </div>
+          
+        </div>
+      </div>
+      
+      <!-- VISTA: Inventario -->
+      <div id="view-inventario" class="hidden">
+        <div class="space-y-6">
+
+          <!-- Barra di Ricerca -->
+          <div class="relative">
+            <input type="text" id="search-bar" placeholder="Cerca prodotto..." class="w-full px-4 py-3 pr-10 rounded-lg shadow-md border border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 absolute top-1/2 right-3 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          
+          <!-- Filtri Vista Inventario (MODIFICATO) -->
+          <div class="relative">
+            <!-- Pulsante per aprire il menu a tendina -->
+            <button id="toggle-filters-btn" class="flex items-center space-x-2 bg-white px-4 py-2 rounded-lg shadow-md font-medium text-gray-700 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600">
+              <!-- Icona "Sliders" (MODIFICATA) -->
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500 dark:text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-1.57 2.106A1.532 1.532 0 013.17 7.49c-1.56.38-1.56 2.6 0 2.98a1.532 1.532 0 01.948 2.286c-.836 1.372.734 2.942 2.106 1.57A1.532 1.532 0 017.49 16.83c.38 1.56 2.6 1.56 2.98 0a1.532 1.532 0 012.286-.948c1.372.836 2.942-.734 1.57-2.106A1.532 1.532 0 0116.83 12.51c1.56-.38 1.56-2.6 0-2.98a1.532 1.532 0 01-.948-2.286c.836-1.372-.734-2.942-2.106-1.57A1.532 1.532 0 0112.51 3.17zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" />
+              </svg>
+              <span>Opzioni Vista</span>
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500 dark:text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+              </svg>
+            </button>
+      
+            <!-- Contenitore del menu a tendina (MODIFICATO) -->
+            <div id="filters-dropdown" class="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-xl p-4 z-30 hidden w-full md:w-auto dark:bg-gray-800 dark:border dark:border-gray-700">
+              <div class="flex flex-col md:flex-row gap-6">
+                
+                <!-- Sezione Vista -->
+                <div>
+                  <span class="font-medium text-gray-700 block mb-2 dark:text-gray-200">Vista:</span>
+                  <div class="flex flex-col sm:flex-row gap-2">
+                    <button id="view-compatta" class="px-3 py-1 rounded-md text-sm font-medium bg-blue-500 text-white">
+                      Compatta
+                    </button>
+                    <button id="view-completa" class="px-3 py-1 rounded-md text-sm font-medium bg-white shadow-sm dark:bg-gray-600 dark:text-gray-200">
+                      Completa
+                    </button>
+                  </div>
+                </div>
+
+                <!-- NUOVA Sezione Ordinamento -->
+                <div>
+                  <span class="font-medium text-gray-700 block mb-2 dark:text-gray-200">Ordina per:</span>
+                  <select id="sort-by-select" class="bg-white border border-gray-300 rounded-md shadow-sm p-2 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="nome-asc">Nome (A-Z)</option>
+                    <option value="nome-desc">Nome (Z-A)</option>
+                    <option value="carenza-desc">Carenza (Più urgenti)</option>
+                    <option value="costo-desc">Costo (Decrescente)</option>
+                    <option value="costo-asc">Costo (Crescente)</option>
+                  </select>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+
+          <!-- Lista Prodotti Inventario -->
+          <div id="inventory-list-container" class="space-y-3">
+            <!-- Contenuto generato da JS -->
+            <p id="no-products-message" class="text-center text-gray-500 dark:text-gray-400 py-10 text-lg hidden">
+              Nessun prodotto nell'inventario.
+            </p>
+            <p id="no-search-results-message" class="text-center text-gray-500 dark:text-gray-400 py-10 text-lg hidden">
+              Nessun prodotto trovato.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- VISTA: Lista Spesa (RIPRISTINATA) -->
+      <div id="view-listaSpesa" class="hidden">
+        <div class="bg-white p-4 md:p-6 rounded-lg shadow-md dark:bg-gray-800">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+            <h2 class="text-2xl md:text-3xl font-bold text-gray-800 dark:text-gray-100">Lista della Spesa</h2>
+            <!-- Pulsante Copia -->
+            <button id="copy-shopping-list-btn" class="mt-4 md:mt-0 flex items-center justify-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-md hover:bg-blue-700 transition-all duration-200 font-semibold dark:hover:bg-blue-500">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              <span>Copia Lista per Fornitori</span>
+            </button>
+          </div>
+          <div id="shopping-list-container" class="space-y-8">
+            <!-- Contenuto generato da JS -->
+          </div>
+        </div>
+      </div>
+      
+      <!-- VISTA: Report Costi (RIPRISTINATA) -->
+      <div id="view-costi" class="hidden">
+        <div class="bg-white p-4 md:p-6 rounded-lg shadow-md dark:bg-gray-800">
+          <h2 class="text-2xl md:text-3xl font-bold text-gray-800 mb-6 dark:text-gray-100">Report Valore Inventario</h2>
+          <div id="cost-report-container" class="space-y-8">
+            <!-- Contenuto generato da JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- NUOVA VISTA: Cantina Vini -->
+      <div id="view-cantina" class="hidden">
+        <div class="space-y-6">
+
+          <!-- Barra di Ricerca Vini -->
+          <div class="relative">
+            <input type="text" id="search-bar-vini" placeholder="Cerca per nome, anno, cantina, regione..." class="w-full px-4 py-3 pr-10 rounded-lg shadow-md border border-transparent focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-gray-100">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 absolute top-1/2 right-3 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+
+          <!-- Lista Vini (Layout a Griglia) -->
+          <div id="wine-list-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <!-- Contenuto generato da JS -->
+            <p id="no-wines-message" class="text-center text-gray-500 dark:text-gray-400 py-10 text-lg hidden md:col-span-2 lg:col-span-3">
+              Nessun vino nella cantina.
+            </p>
+            <p id="no-search-results-wines-message" class="text-center text-gray-500 dark:text-gray-400 py-10 text-lg hidden md:col-span-2 lg:col-span-3">
+              Nessun vino trovato.
+            </p>
+          </div>
+        </div>
+      </div>
+      
+    </main>
+
+  </div>
+
+  <!-- ================== Pulsante Flottante + (Inventario) ================== -->
+  <button id="open-form-modal-btn" class="fixed bottom-6 right-6 md:bottom-10 md:right-10 bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition-all duration-200 z-30">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+    </svg>
+  </button>
+
+  <!-- ================== NUOVO Pulsante Flottante + (Cantina) ================== -->
+  <button id="open-wine-modal-btn" class="fixed bottom-6 right-6 md:bottom-10 md:right-10 bg-purple-600 text-white p-4 rounded-full shadow-lg hover:bg-purple-700 transition-all duration-200 z-30 hidden">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+    </svg>
+  </button>
+
+  <!-- ================== Modale Form Aggiungi Prodotto ================== -->
+  <div id="form-modal-overlay" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-40 hidden">
+    
+    <!-- Contenuto Modale -->
+    <div class="bg-white p-4 md:p-6 rounded-lg shadow-md w-full max-w-4xl relative max-h-[90vh] overflow-y-auto dark:bg-gray-800">
+      
+      <!-- Pulsante Chiudi Modale -->
+      <button id="close-form-modal-btn" class="absolute top-3 right-4 text-gray-400 hover:text-gray-600 z-10 dark:hover:text-gray-200">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+
+      <!-- Form Aggiungi Prodotto -->
+      <h2 class="text-xl md:text-2xl font-semibold mb-4 text-gray-700 dark:text-gray-200">Aggiungi Nuovo Prodotto</h2>
+      
+      <form id="add-product-form" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Colonna 1 -->
+        <div class="flex flex-col">
+          <label class="mb-1 font-medium text-gray-600 dark:text-gray-300">Nome Prodotto</label>
+          <input type="text" id="new-nome" class="border rounded-md p-2 w-full shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" required>
+        </div>
+        
+        <div class="flex flex-col">
+          <label class="mb-1 font-medium text-gray-600 dark:text-gray-300">Categoria</label>
+          <input type="text" id="new-categoria" class="border rounded-md p-2 w-full shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" required>
+        </div>
+
+        <!-- Colonna 2 -->
+        <div class="flex flex-col">
+          <label class="mb-1 font-medium text-gray-600 dark:text-gray-300">Fornitore</label>
+          <input type="text" id="new-fornitore" class="border rounded-md p-2 w-full shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" required>
+        </div>
+        
+        <div class="flex flex-col">
+          <label class="mb-1 font-medium text-gray-600 dark:text-gray-300">Costo per Unità (€)</label>
+          <input type="number" id="new-costo" min="0" step="0.01" class="border rounded-md p-2 w-full shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" placeholder="0.00">
+        </div>
+
+        <!-- Colonna 3 -->
+        <div class="flex flex-col">
+          <label class="mb-1 font-medium text-gray-600 dark:text-gray-300">Unità</label>
+          <select id="new-unita" class="border rounded-md p-2 w-full shadow-sm bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" required>
+            <option value="pz">pz</option>
+            <option value="kg">kg</option>
+            <option value="gr">gr</option>
+            <option value="ct">ct</option>
+            <option value="lt">lt</option>
+            <option value="cl">cl</option>
+            <option value="ml">ml</option>
+          </select>
+        </div>
+
+        <div class="flex flex-col">
+          <label class="mb-1 font-medium text-gray-600 dark:text-gray-300">Q.tà Attuale</label>
+          <!-- MODIFICATO: step="any" per decimali -->
+          <input type="number" id="new-quantita" min="0" step="any" class="border rounded-md p-2 w-full shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" placeholder="0" required>
+        </div>
+        
+        <!-- Colonna 4 -->
+        <div class="flex flex-col">
+          <label class="mb-1 font-medium text-gray-600 dark:text-gray-300">Q.tà Minima</label>
+          <!-- MODIFICATO: step="any" per decimali -->
+          <input type="number" id="new-quantitaMinima" min="0" step="any" class="border rounded-md p-2 w-full shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" placeholder="0" required>
+        </div>
+
+        <div class="flex flex-col">
+          <label class="mb-1 font-medium text-gray-600 dark:text-gray-300">Stato</label>
+          <select id="new-stato" class="border rounded-md p-2 w-full shadow-sm bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" required>
+            <option value="Disponibile">Disponibile</option>
+            <option value="Non Necessario">Non Necessario</option>
+            <option value="Confezione Aperta">Confezione Aperta</option>
+          </select>
+        </div>
+
+        <!-- Pulsante Submit -->
+        <div class="md:col-span-2 lg:col-span-4 flex justify-end mt-4">
+          <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg shadow-md hover:bg-blue-700 transition-all duration-200 font-semibold">
+            Aggiungi Prodotto
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ================== NUOVO Modale Form Aggiungi Vino ================== -->
+  <div id="wine-modal-overlay" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-40 hidden">
+    
+    <!-- Contenuto Modale -->
+    <div class="bg-white p-4 md:p-6 rounded-lg shadow-md w-full max-w-2xl relative max-h-[90vh] overflow-y-auto dark:bg-gray-800">
+      
+      <!-- Pulsante Chiudi Modale -->
+      <button id="close-wine-modal-btn" class="absolute top-3 right-4 text-gray-400 hover:text-gray-600 z-10 dark:hover:text-gray-200">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+
+      <!-- Form Aggiungi Vino -->
+      <h2 class="text-xl md:text-2xl font-semibold mb-4 text-gray-700 dark:text-gray-200">Aggiungi Nuovo Vino</h2>
+      
+      <form id="add-wine-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        
+        <div class="flex flex-col md:col-span-2">
+          <label class="mb-1 font-medium text-gray-600 dark:text-gray-300">Nome Vino (Etichetta)</label>
+          <input type="text" id="new-vino-nome" class="border rounded-md p-2 w-full shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" required>
+        </div>
+        
+        <!-- NUOVI CAMPI -->
+        <div class="flex flex-col">
+          <label class="mb-1 font-medium text-gray-600 dark:text-gray-300">Cantina (Produttore)</label>
+          <input type="text" id="new-vino-cantina" class="border rounded-md p-2 w-full shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" placeholder="Es. Gaja">
+        </div>
+        <div class="flex flex-col">
+          <label class="mb-1 font-medium text-gray-600 dark:text-gray-300">Regione</label>
+          <input type="text" id="new-vino-regione" class="border rounded-md p-2 w-full shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" placeholder="Es. Piemonte">
+        </div>
+        <!-- FINE NUOVI CAMPI -->
+
+        <div class="flex flex-col">
+          <label class="mb-1 font-medium text-gray-600 dark:text-gray-300">Anno</label>
+          <input type="number" id="new-vino-anno" min="1900" max="2100" step="1" class="border rounded-md p-2 w-full shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" placeholder="Es. 2020" required>
+        </div>
+
+        <div class="flex flex-col">
+          <label class="mb-1 font-medium text-gray-600 dark:text-gray-300">Quantità (Bottiglie)</label>
+          <input type="number" id="new-vino-quantita" min="0" step="1" class="border rounded-md p-2 w-full shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" placeholder="0" required>
+        </div>
+        
+        <div class="flex flex-col">
+          <label class="mb-1 font-medium text-gray-600 dark:text-gray-300">Costo Acquisto (€)</label>
+          <input type="number" id="new-vino-costo" min="0" step="0.01" class="border rounded-md p-2 w-full shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" placeholder="0.00" required>
+        </div>
+
+        <div class="flex flex-col">
+          <label class="mb-1 font-medium text-gray-600 dark:text-gray-300">Prezzo Vendita (€)</label>
+          <input type="number" id="new-vino-vendita" min="0" step="0.01" class="border rounded-md p-2 w-full shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" placeholder="0.00" required>
+        </div>
+
+        <!-- Pulsante Submit -->
+        <div class="md:col-span-2 flex justify-end mt-4">
+          <button type="submit" class="bg-purple-600 text-white px-6 py-2 rounded-lg shadow-md hover:bg-purple-700 transition-all duration-200 font-semibold">
+            Aggiungi Vino
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ================== Inizio Script JS ================== -->
+  <script type="module" src="script.js"></script>
